@@ -1,7 +1,6 @@
 package com.gmadhu.biometric
 
 import android.os.Bundle
-import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -17,14 +16,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.gmadhu.biometric.helper.BioMetricHelper
+import com.gmadhu.biometric.helper.BioMetricHelper.getCipher
 import com.gmadhu.biometric.helper.BiometricClassDetails
 import com.gmadhu.biometric.helper.BiometricPreferences
 import com.gmadhu.biometric.helper.BiometricProperties
-import com.gmadhu.biometric.helper.utils
+import com.gmadhu.biometric.helper.utils.ANDROID_KEYSTORE
+import com.gmadhu.biometric.helper.utils.KEY_NAME
 import com.gmadhu.biometric.ui.theme.BiometricTheme
-import java.security.KeyStore
-import javax.crypto.Cipher
-import javax.crypto.SecretKey
 
 class MainActivity : AppCompatActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -36,21 +34,21 @@ class MainActivity : AppCompatActivity() {
                 BiometricClassScreen(viewModel) {
                     val preferences = BiometricPreferences(this)
                     if (preferences.isBiometricSet) {
-                        val cipher = getCipher()
+                        val cipher = getCipher(KEY_NAME, ANDROID_KEYSTORE, this)
                         if (cipher == null) {
                             preferences.isBiometricSet = false
-                            this.showBiometricPrompt(
+                            showBiometricPrompt(
                                 "Device biometric changes, update biometric",
                                 "Set up biometric credential"
                             )
                         } else {
-                            this.showBiometricPrompt(
+                            showBiometricPrompt(
                                 "Biometric login for your app",
                                 "Log in using your biometric credential"
                             )
                         }
                     } else {
-                        this.showBiometricPrompt(
+                        showBiometricPrompt(
                             "Biometric setup for your app", "Set up biometric"
                         )
                     }
@@ -64,23 +62,6 @@ class MainActivity : AppCompatActivity() {
         viewModel.retrieveBiometricProperties(this)
     }
 
-    private fun getCipher(): Cipher? {
-        return try {
-            val keyStore = KeyStore.getInstance(utils.ANDROID_KEYSTORE)
-            keyStore.load(null)
-            val secretKey = keyStore.getKey(utils.KEY_NAME, null) as SecretKey
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey)
-            cipher
-        } catch (e: KeyPermanentlyInvalidatedException) {
-            val preferences = BiometricPreferences(this)
-            preferences.isBiometricSet = false // Reset biometric status
-            null
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
 
     private fun showBiometricPrompt(title: String, subTitle: String) {
 
@@ -92,7 +73,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    BioMetricHelper.createBiometricKey()
+                    BioMetricHelper.createBiometricKey(KEY_NAME, ANDROID_KEYSTORE)
                     val preferences = BiometricPreferences(this@MainActivity)
                     preferences.isBiometricSet = true
                     showToast("Authentication succeeded!")

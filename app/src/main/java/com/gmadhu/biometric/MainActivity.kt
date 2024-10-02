@@ -7,8 +7,13 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
@@ -20,12 +25,18 @@ import com.gmadhu.biometric.helper.BioMetricHelper.getCipher
 import com.gmadhu.biometric.helper.BiometricClassDetails
 import com.gmadhu.biometric.helper.BiometricPreferences
 import com.gmadhu.biometric.helper.BiometricProperties
+import com.gmadhu.biometric.helper.CryptographyManager
 import com.gmadhu.biometric.helper.utils.ANDROID_KEYSTORE
 import com.gmadhu.biometric.helper.utils.KEY_NAME
 import com.gmadhu.biometric.ui.theme.BiometricTheme
+import java.nio.charset.Charset
+import java.util.concurrent.Executor
 
 class MainActivity : AppCompatActivity() {
     private val viewModel: MainViewModel by viewModels()
+    private lateinit var cryptographyManager: CryptographyManager
+    private lateinit var ciphertext: ByteArray
+    private lateinit var initializationVector: ByteArray
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,6 +101,60 @@ class MainActivity : AppCompatActivity() {
                 .setNegativeButtonText("Cancel").build()
 
         biometricPrompt.authenticate(promptInfo)
+    }
+
+    // Function to perform biometric authentication using Cipher
+    fun authenticateWithCipher() {
+        val executor: Executor = ContextCompat.getMainExecutor(this)
+        val cipher = getCipher(KEY_NAME, ANDROID_KEYSTORE, this)
+        val biometricPrompt = BiometricPrompt(
+            this,
+            executor,
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    super.onAuthenticationSucceeded(result)
+                    // Retrieve the cipher from the result
+                    showToast("Authentication success")
+                    //todo
+                    //  val isEncrypt=true
+                    // val result= processData(result.cryptoObject,isEncrypt)
+                }
+
+                override fun onAuthenticationFailed() {
+                    super.onAuthenticationFailed()
+                    showToast("Authentication failed")
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    super.onAuthenticationError(errorCode, errString)
+                    showToast("Authentication failed")
+                }
+            })
+
+        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Biometric Authentication")
+            .setSubtitle("Log in using your biometric credential")
+            .setNegativeButtonText("Cancel")
+            .build()
+
+        biometricPrompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher!!))
+    }
+
+    private fun processData(
+        cryptoObject: BiometricPrompt.CryptoObject?,
+        isEncrypt: Boolean
+    ): String {
+        val data = if (isEncrypt) {
+            val encryptedData =
+                cryptographyManager.encryptData("your plain text", cryptoObject?.cipher!!)
+            ciphertext = encryptedData.ciphertext
+            initializationVector = encryptedData.initializationVector
+
+            String(ciphertext, Charset.forName("UTF-8"))
+        } else {
+            cryptographyManager.decryptData(ciphertext, cryptoObject?.cipher!!)
+        }
+        return data
     }
 
     private fun showToast(message: String) {
